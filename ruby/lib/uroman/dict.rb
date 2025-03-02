@@ -3,21 +3,21 @@
 module Uroman
   # Base class for simple dictionary-like objects
   class Dict
-    def initialize(**kw_args)
+    def initialize(**kwargs)
       @data = {}
+      kwargs.each do |key, value|
+        next if value.nil? || value == [] || value == false
 
-      kw_args.each do |key, value|
-        key2 = key.to_s.tr('_', '-')
-        @data[key2] = value unless value.nil? || value == [] || value == false
+        @data[key.to_s.tr('_', '-')] = value
       end
-    end
-
-    def inspect
-      @data.map { |k, v| "#{k}=#{v}" }.join(' ')
     end
 
     def [](key)
       @data[key.to_s]
+    end
+
+    def inspect
+      @data.inspect
     end
 
     def empty?
@@ -42,4 +42,4 @@ module Uroman
   # typical attributes: script_name, direction, abugida_default_vowels, alt_script_names, languages
   class Script < Dict
   end
-end 
+end

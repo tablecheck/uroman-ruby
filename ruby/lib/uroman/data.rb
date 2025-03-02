@@ -2,6 +2,7 @@
 
 require 'set'
 require 'json'
+require 'unicode/categories'
 
 require_relative 'util'
 require_relative 'dict'
@@ -50,7 +51,7 @@ module Uroman
                   :n_non_utf8_characters
 
     def initialize(data_dir = nil, **args)
-      @data_dir = data_dir || default_data_dir(**args)
+      @data_dir = data_dir || self.class.default_data_dir(**args)
       @rom_rules = Hash.new { |h, k| h[k] = [] }
       @scripts = Hash.new { |h, k| h[k] = Script.new }
       @dict_bool = Hash.new(false)
@@ -407,7 +408,7 @@ module Uroman
           while codepoint < 0xF0000
             codepoint += 1
             char = codepoint.chr(Encoding::UTF_8)
-            num = first_non_nil(ud_numeric(char), num_value(char))
+            num = Util.first_non_nil(Util.ud_numeric(char), num_value(char))
             next if num.nil?
 
             result_dict = {}
@@ -458,22 +459,22 @@ module Uroman
                        end
 
             rom = "#{value}#{fraction ? " #{fraction.numerator}/#{fraction.denominator}" : ''}".strip
-            add_non_nil_to_hash(result_dict, 'txt', orig_txt)
-            add_non_nil_to_hash(result_dict, 'rom', rom)
-            add_non_nil_to_hash(result_dict, 'value', value)
-            add_non_nil_to_hash(result_dict, 'fraction', fraction ? [fraction.numerator, fraction.denominator] : nil)
-            add_non_nil_to_hash(result_dict, 'type', num_type)
+            Util.add_non_nil_to_hash(result_dict, 'txt', orig_txt)
+            Util.add_non_nil_to_hash(result_dict, 'rom', rom)
+            Util.add_non_nil_to_hash(result_dict, 'value', value)
+            Util.add_non_nil_to_hash(result_dict, 'fraction', fraction ? [fraction.numerator, fraction.denominator] : nil)
+            Util.add_non_nil_to_hash(result_dict, 'type', num_type)
             result_dict['is-large-power'] = true if is_large_power
-            add_non_nil_to_hash(result_dict, 'base', num_base)
-            add_non_nil_to_hash(result_dict, 'mult', base_multiplier)
-            add_non_nil_to_hash(result_dict, 'script', script)
+            Util.add_non_nil_to_hash(result_dict, 'base', num_base)
+            Util.add_non_nil_to_hash(result_dict, 'mult', base_multiplier)
+            Util.add_non_nil_to_hash(result_dict, 'script', script)
 
             if num_type.start_with?('other')
-              add_non_nil_to_hash(result_dict, 'name', name)
+              Util.add_non_nil_to_hash(result_dict, 'name', name)
               f_err.puts result_dict.to_json
               n_err += 1
             else
-              add_non_nil_to_hash(result_dict, 'name', name) unless script
+              Util.add_non_nil_to_hash(result_dict, 'name', name) unless script
               f_out.puts result_dict.to_json
               n_out += 1
             end
@@ -588,13 +589,14 @@ module Uroman
       @dict_str[['script', char]]
     end
 
+    # Low level test function that checks and displays romanization information.
     def test_output_of_selected_scripts_and_rom_rules
       output = ""
       { "Oriya" => scripts["oriya"], "Chinese" => scripts["chinese"] }.each do |s, d|
         output += "SCRIPT #{s} #{d}\n"
       end
 
-      %w[ƿ β и μπ ⠹ 亿 ちょ и 𓍧 正 分之 ऽ ศ ด์ ย ड़].each do |s|
+      %w[ƿ β и μπ ⠹ 亿 ちょ и 𓍧 正 分之 ऽ ศ ด์ ढ़ ड़].each do |s|
         d = rom_rules[s]
         output += "DICT #{s} #{d}\n"
       end
@@ -603,7 +605,7 @@ module Uroman
         output += "SCRIPT-NAME #{s} #{chr_script_name(s)}\n"
       end
 
-      %w[万 \uF8F7 \U00013368 \U0001308B \u0E48 \u0E40].each do |s|
+      %W[万 \uF8F7 \u{13368} \u{1308B} \u0E48 \u0E40].each do |s|
         name = chr_name(s)
         num = dict_num[s]
         pic = dict_str[["pic", s]]
@@ -620,7 +622,7 @@ module Uroman
         output += "\n"
       end
 
-      mayan12 = "\U0001D2EC"
+      mayan12 = "\u{1D2EC}"
       egyptian600 = "𓍧"
       runic90 = "𐍁"
       klingon2 = "\uF8F2"
@@ -629,7 +631,7 @@ module Uroman
         output += "NUM-EDGE: #{NumEdge.new(offset, offset + 1, c, self)}\n"
       end
 
-      %w[¼ ८].each do |s|
+      %W[\u00bc \u0968].each do |s|
         output += "NUM-PROPS: #{num_props[s]}\n"
       end
       puts output
@@ -680,11 +682,11 @@ module Uroman
         f_out.puts romanize_string(line.strip, lcode, **args)
         break if args[:max_lines] && line_number >= args[:max_lines]
       end
-
     ensure
       f_in&.close if input_filename
       f_out&.close if output_filename
     end
+
     def self.apply_any_offset_to_cached_rom_result(cached_rom_result, offset = 0)
       return cached_rom_result if cached_rom_result.is_a?(String)
       return cached_rom_result if offset == 0
@@ -728,34 +730,33 @@ module Uroman
       lat.add_braille_numbers(**args)
       lat.add_rom_fall_back_singles(**args)
 
-      result = if rom_format == ROM_FORMAT_LATTICE
-                 all_edges = lat.all_edges(0, s.length)
-                 lat.add_alternatives(all_edges)
-                 if @rom_cache_size < @rom_max_cache_size
-                   @rom_cache[[s, lcode, rom_format]] = all_edges
-                   @rom_cache_size += 1
-                 end
-                 self.class.apply_any_offset_to_cached_rom_result(all_edges, offset)
-               else
-                 best_edges = lat.best_rom_edge_path(0, s.length)
-                 if [ROM_FORMAT_EDGES, ROM_FORMAT_ALTS].include?(rom_format)
-                   lat.add_alternatives(best_edges) if rom_format == ROM_FORMAT_ALTS
-                   if @rom_cache_size < @rom_max_cache_size
-                     @rom_cache[[s, lcode, rom_format]] = best_edges
-                     @rom_cache_size += 1
-                   end
-                   self.class.apply_any_offset_to_cached_rom_result(best_edges, offset)
-                 else
-                   rom = lat.edge_path_to_surf(best_edges)
-                   lat = nil
-                   if @rom_cache_size < @rom_max_cache_size
-                     @rom_cache[[s, lcode, rom_format]] = rom
-                     @rom_cache_size += 1
-                   end
-                   rom
-                 end
-               end
-      result
+      if rom_format == ROM_FORMAT_LATTICE
+        all_edges = lat.all_edges(0, s.length)
+        lat.add_alternatives(all_edges)
+        if @rom_cache_size < @rom_max_cache_size
+          @rom_cache[[s, lcode, rom_format]] = all_edges
+          @rom_cache_size += 1
+        end
+        self.class.apply_any_offset_to_cached_rom_result(all_edges, offset)
+      else
+        best_edges = lat.best_rom_edge_path(0, s.length)
+        if [ROM_FORMAT_EDGES, ROM_FORMAT_ALTS].include?(rom_format)
+          lat.add_alternatives(best_edges) if rom_format == ROM_FORMAT_ALTS
+          if @rom_cache_size < @rom_max_cache_size
+            @rom_cache[[s, lcode, rom_format]] = best_edges
+            @rom_cache_size += 1
+          end
+          self.class.apply_any_offset_to_cached_rom_result(best_edges, offset)
+        else
+          rom = lat.edge_path_to_surf(best_edges)
+          lat = nil
+          if @rom_cache_size < @rom_max_cache_size
+            @rom_cache[[s, lcode, rom_format]] = rom
+            @rom_cache_size += 1
+          end
+          rom
+        end
+      end
     end
 
     def romanize_string(s, lcode = nil, rom_format = ROM_FORMAT_STR, **args)

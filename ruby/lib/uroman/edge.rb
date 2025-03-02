@@ -9,10 +9,10 @@ module Uroman
   class Edge
     attr_accessor :start, :finish, :txt, :type
 
-    def initialize(start, finish, s, annotation = nil)
+    def initialize(start, finish, txt, annotation = nil)
       @start = start
       @finish = finish
-      @txt = s
+      @txt = txt
       @type = annotation
     end
 
@@ -25,25 +25,13 @@ module Uroman
     end
 
     def to_json(*_args)
-      JSON.generate([@start, @finish, @txt, @type])
+      [@start, @finish, @txt, @type].to_json
     end
 
     def self.json_str(rom_result)
-      if rom_result.is_a?(String)
-        rom_result
-      else
-        result = +'['
-        rom_result.each do |edge|
-          if edge.is_a?(Edge)
-            result += edge.to_json
-          else
-            result += edge.to_s
-          end
-          result += ','
-        end
-        result.chomp!(',')
-        result + ']'
-      end
+      return rom_result if rom_result.is_a?(String)
+
+      "[#{rom_result.map { |edge| edge.is_a?(Edge) ? edge.to_json : edge.to_s }.join(',')}]"
     end
   end
-end 
+end

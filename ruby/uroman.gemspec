@@ -25,6 +25,7 @@ Gem::Specification.new do |s|
   }
 
   s.required_ruby_version = '>= 3.0'
+  s.add_dependency('unicode-categories')
   s.add_dependency('unicode-name')
   s.add_dependency('unicode-numeric_value')
 
