@@ -39,9 +39,9 @@ module Uroman
     end
 
     def add_edge(edge)
-      @lattice[[edge.start, edge.end]] << edge
-      @lattice[[edge.start, 'right']] << edge.end
-      @lattice[[edge.end, 'left']] << edge.start
+      @lattice[[edge.start, edge.finish]] << edge
+      @lattice[[edge.start, 'right']] << edge.finish
+      @lattice[[edge.finish, 'left']] << edge.start
     end
 
     def to_s
@@ -57,8 +57,7 @@ module Uroman
     end
 
     def self.char_is_braille?(c)
-      # TODO: perf benchmark: (0x2800..0x28FF).cover?(c.ord)
-      c.match?(/[\u2800-\u28FF]/)
+      (0x2800..0x28FF).cover?(c.ord)
     end
 
     def char_is_subjoined_letter?(c)
@@ -66,8 +65,8 @@ module Uroman
     end
 
     def char_is_regular_letter?(c)
-      name = data.chr_name(c)
-      name.include?('LETTER') && !name.include?('SUBJOINED')
+      char_name = data.chr_name(c)
+      char_name.include?('LETTER') && !char_name.include?('SUBJOINED')
     end
 
     def char_is_letter?(c)
@@ -85,17 +84,17 @@ module Uroman
     def is_at_start_of_word?(position)
       first_char = @s[position]
       first_char_is_braille = self.class.char_is_braille?(first_char)
-      end_pos = position
+      finish = position
 
-      return !@props[['preceded_by_alpha', end_pos]] if @props.key?(['preceded_by_alpha', end_pos])
+      return !@props[['preceded_by_alpha', finish]] if @props.key?(['preceded_by_alpha', finish])
 
-      if end_pos > 0 && @s[end_pos - 1].match?(/[[:alpha:]]/)
+      if finish > 0 && @s[finish - 1].match?(/[[:alpha:]]/)
         @props[['preceded_by_alpha', position]] = true
         return false
       end
 
-      @lattice[[end_pos, 'left']].each do |start|
-        @lattice[[start, end_pos]].each do |edge|
+      @lattice[[finish, 'left']].each do |start|
+        @lattice[[start, finish]].each do |edge|
           prev_letter = edge.txt.empty? ? nil : edge.txt[-1]
           if prev_letter&.match?(/[[:alpha:]]/) || (first_char_is_braille && prev_letter == "'")
             @props[['preceded_by_alpha', position]] = true
@@ -121,8 +120,8 @@ module Uroman
         start += 1
       end
 
-      (start + 1..@max_vertex).each do |end_pos|
-        segment = @s[start...end_pos]
+      (start + 1..@max_vertex).each do |finish|
+        segment = @s[start...finish]
         break unless data.dict_bool[['s-prefix', segment]]
 
         data.rom_rules[segment].each do |rom_rule|
@@ -170,7 +169,7 @@ module Uroman
         return [false, 'consonant-to-the-left'] if left_edge && left_edge.txt.match?(/[bcdfghjklmnpqrstvxz]$/)
       end
 
-      next_char_rom = first_non_nil(
+      next_char_rom = Util.first_non_nil(
         simple_top_romanization_candidate_for_span(adj_position, adj_position + 2, simple_search: true),
         simple_top_romanization_candidate_for_span(adj_position, adj_position + 1, simple_search: true),
         '?'
@@ -179,7 +178,7 @@ module Uroman
       return [true, "not-followed-by-vowel #{next_char_rom}"] unless next_char_rom.downcase.match?(/[aeiou]/)
 
       if next_char == "\u0E2D" && !next_char2.nil?
-        next_char2_rom = first_non_nil(
+        next_char2_rom = Util.first_non_nil(
           simple_top_romanization_candidate_for_span(adj_position + 1, adj_position + 2, simple_search: true),
           '?'
         )
@@ -193,9 +192,9 @@ module Uroman
       data.rom_rules[s]&.dig(0, 't')
     end
 
+    # This method contains a number of special romanization heuristics that typically modify
+    # an existing or preliminary edge based on context.
     def expand_rom_with_special_chars(rom, start, finish, **args)
-      # This method contains a number of special romanization heuristics that typically modify
-      # an existing or preliminary edge based on context.
       orig_start = start
       annot = nil
       return [rom, start, finish, nil] if rom.empty?
@@ -220,11 +219,11 @@ module Uroman
       if prev_char && "っッ\u0A71".include?(prev_char) &&
         data.chr_script_name(prev_char) == data.chr_script_name(prev_char) &&
         (m_double_consonant = rom.match(/(ch|[bcdfghjklmnpqrstwz])/))
-        if 'っッ'.include?(prev_char) # for Japanese, per Hepburn, use 'tch'
-          rom = m_double_consonant[1].gsub('ch', 't') + rom
-        else
-          rom = m_double_consonant[1].gsub('ch', 'c') + rom
-        end
+        rom = if 'っッ'.include?(prev_char) # for Japanese, per Hepburn, use 'tch'
+                m_double_consonant[1].gsub('ch', 't') + rom
+              else
+                m_double_consonant[1].gsub('ch', 'c') + rom
+              end
         start -= 1
         first_char = @s[start]
         prev_char = start >= 1 ? @s[start - 1] : ''
@@ -235,17 +234,13 @@ module Uroman
         if start + 1 == finish && rom.match?(/[bcdfghjklmnpqrstvwxyz]+$/)
           if data.dict_str[['syllable-info', prev_char]] == 'written-pre-consonant-spoken-post-consonant'
             [1].each do |vowel_prefix_len|
-              if vowel_prefix_len <= start
-                [3, 2, 1].each do |vowel_suffix_len|
-                  if finish + vowel_suffix_len <= @s.length
-                    pattern = @s[start - vowel_prefix_len, vowel_prefix_len] +
-                      '-' + @s[finish, vowel_suffix_len]
-                    if data.rom_rules[pattern]
-                      vowel_rom = data.rom_rules[pattern][0]['t']
-                      return [rom + vowel_rom, start - vowel_prefix_len, finish + vowel_suffix_len, 'rom exp']
-                    end
-                  end
-                end
+              next unless vowel_prefix_len <= start
+              [3, 2, 1].each do |vowel_suffix_len|
+                next unless finish + vowel_suffix_len <= @s.length
+                pattern = "#{@s[start - vowel_prefix_len, vowel_prefix_len]}–#{@s[finish, vowel_suffix_len]}"
+                next unless (rule = data.rom_rules[pattern])
+                vowel_rom = rule[0]['t']
+                return [rom + vowel_rom, start - vowel_prefix_len, finish + vowel_suffix_len, 'rom exp']
               end
             end
           end
@@ -356,7 +351,7 @@ module Uroman
         tibetan_letter_positions.each do |i|
           c = s[i]
           orig_txt += c
-          rom = first_non_nil(simple_top_romanization_candidate_for_span(i, i + 1), "?")
+          rom = Util.first_non_nil(simple_top_romanization_candidate_for_span(i, i + 1), '?')
           @props[["edge-vowel", i]] = nil
 
           if char_is_vowel_sign?(c) || (rom && rom.match?(/[aeiou]+$/))
@@ -516,27 +511,27 @@ module Uroman
       rom
     end
 
-    def cand_is_valid(rom_rule, start, end_idx, rom)
+    def cand_is_valid(rom_rule, start, finish, rom)
       return false if rom.nil?
       return false if rom_rule['dont-use-at-start-of-word'] && is_at_start_of_word?(start)
       return false if rom_rule['use-only-at-start-of-word'] && !is_at_start_of_word?(start)
-      return false if rom_rule['dont-use-at-end-of-word'] && is_at_end_of_word?(end_idx)
-      return false if rom_rule['use-only-at-end-of-word'] && !is_at_end_of_word?(end_idx)
+      return false if rom_rule['dont-use-at-end-of-word'] && is_at_end_of_word?(finish)
+      return false if rom_rule['use-only-at-end-of-word'] && !is_at_end_of_word?(finish)
       return false if rom_rule['use-only-for-whole-word'] &&
-        !(is_at_start_of_word?(start) && is_at_end_of_word?(end_idx))
+        !(is_at_start_of_word?(start) && is_at_end_of_word?(finish))
       return false if rom_rule['lcodes']&.any? && !rom_rule['lcodes'].include?(lcode)
 
       true
     end
 
-    def simple_sorted_romanization_candidates_for_span(start, end_idx)
-      substring = s[start...end_idx]
+    def simple_sorted_romanization_candidates_for_span(start, finish)
+      substring = s[start...finish]
       return [] unless data.dict_bool[['s-prefix', substring]]
 
       rom_rule_candidates = []
       data.rom_rules[substring].each do |rom_rule|
         rom = rom_rule['t']
-        if cand_is_valid(rom_rule, start, end_idx, rom)
+        if cand_is_valid(rom_rule, start, finish, rom)
           rom_rule_candidates << [(rom_rule['n-restr'] || 0), rom]
         end
       end
@@ -545,18 +540,18 @@ module Uroman
       rom_rule_candidates.map(&:last)
     end
 
-    def simple_top_romanization_candidate_for_span(start, end_idx, simple_search = false)
-      return nil if start.negative? || end_idx > max_vertex
+    def simple_top_romanization_candidate_for_span(start, finish, simple_search = false)
+      return nil if start.negative? || finish > max_vertex
 
-      span_range = [start, end_idx]
+      span_range = [start, finish]
       return simple_top_rom_cache[span_range] if simple_top_rom_cache.key?(span_range)
 
       best_cand = nil
       best_n_restr = nil
       best_rom_rule = nil
 
-      data.rom_rules[s[start...end_idx]].each do |rom_rule|
-        if cand_is_valid(rom_rule, start, end_idx, rom_rule['t'])
+      data.rom_rules[s[start...finish]].each do |rom_rule|
+        if cand_is_valid(rom_rule, start, finish, rom_rule['t'])
           n_restr = rom_rule['n-restr'] || 0
           if best_n_restr.nil? || n_restr > best_n_restr
             best_cand = rom_rule['t']
@@ -569,7 +564,7 @@ module Uroman
       return best_cand if simple_search
 
       if best_rom_rule && (t_at_end_of_syllable = best_rom_rule['t-at-end-of-syllable'])
-        end_of_syllable, _rationale = is_at_end_of_syllable?(end_idx)
+        end_of_syllable, _rationale = is_at_end_of_syllable?(finish)
         best_cand = t_at_end_of_syllable if end_of_syllable
       end
 
@@ -578,10 +573,9 @@ module Uroman
     end
 
     def decomp_rom(char_position)
-      full_string = @s
       char = @s[char_position]
       rom = nil
-      if (ud_decomp_s = UD.decomposition(char))
+      if (ud_decomp_s = char.unicode_normalize(:NFD))
         format_comps = []
         other_comps = []
         decomp_s = ''
@@ -616,11 +610,11 @@ module Uroman
     # Adds a romanization edge to the romanization lattice.
     def add_romanization(**args)
       (0...@max_vertex).each do |start|
-        ((start + 1)..@max_vertex).each do |end_pos|
-          break unless data.dict_bool[['s-prefix', @s[start...end_pos]]]
+        ((start + 1)..@max_vertex).each do |finish|
+          break unless data.dict_bool[['s-prefix', @s[start...finish]]]
 
-          if (rom = simple_top_romanization_candidate_for_span(start, end_pos))
-            if @contains_script['Braille'] && start + 1 == end_pos
+          if (rom = simple_top_romanization_candidate_for_span(start, finish))
+            if @contains_script['Braille'] && start + 1 == finish
               rom.upcase! if @props[['is-upper', start]]
             end
 
@@ -630,15 +624,15 @@ module Uroman
               edge_annotation = 'rom tail'
             end
 
-            new_rom = add_default_abugida_vowel(rom, start, end_pos, annotation: edge_annotation)
+            new_rom = add_default_abugida_vowel(rom, start, finish, annotation: edge_annotation)
             if new_rom.start_with?(rom)
               suffix = new_rom[rom.length..]
               edge_annotation += " c:#{rom} s:#{suffix}" if suffix&.match?(/[aeiou]+$/)
             end
 
-            rom, start2, end2, exp_edge_annotation = expand_rom_with_special_chars(rom, start, end_pos, annotation: edge_annotation, recursive: args[:recursive], **args)
+            rom, start2, finish2, exp_edge_annotation = expand_rom_with_special_chars(rom, start, finish, annotation: edge_annotation, recursive: args[:recursive], **args)
             edge_annotation = exp_edge_annotation || edge_annotation
-            add_edge(Edge.new(start2, end2, rom, edge_annotation))
+            add_edge(Edge.new(start2, finish2, rom, edge_annotation))
           end
         end
 
@@ -680,7 +674,7 @@ module Uroman
     end
 
     def self.edge_is_digit(edge)
-      edge.is_a?(NumEdge) && edge.value.is_a?(Integer) && edge.type == 'digit' && (0..9).cover?(edge.value) && (edge.end - edge.start == 1)
+      edge.is_a?(NumEdge) && edge.value.is_a?(Integer) && edge.type == 'digit' && (0..9).cover?(edge.value) && (edge.finish - edge.start == 1)
     end
 
     def self.is_gap_null_edge(edge)
@@ -747,18 +741,18 @@ module Uroman
 
         # Process consecutive digit edges
         loop do
-          right_edge = best_right_neighbor_edge(prev_edge.end)
+          right_edge = best_right_neighbor_edge(prev_edge.finish)
 
           if edge_is_digit(right_edge)
             sub_edges << right_edge
             new_value_s += right_edge.value.to_s
             n_decimals += 1 if n_decimals
             prev_edge = right_edge
-          elsif prev_edge.end < s.length && s[prev_edge.end] == '.' && n_decimal_points.zero?
-            right_edge2 = best_right_neighbor_edge(prev_edge.end + 1)
+          elsif prev_edge.finish < s.length && s[prev_edge.finish] == '.' && n_decimal_points.zero?
+            right_edge2 = best_right_neighbor_edge(prev_edge.finish + 1)
 
             if right_edge2 && edge_is_digit(right_edge2)
-              right_edge ||= Edge.new(prev_edge.end, prev_edge.end + 1, s[prev_edge.end], 'decimal period')
+              right_edge ||= Edge.new(prev_edge.finish, prev_edge.finish + 1, s[prev_edge.finish], 'decimal period')
               add_edge(right_edge)
               sub_edges.concat([right_edge, right_edge2])
               new_value_s += ".#{right_edge2.value}"
@@ -776,7 +770,7 @@ module Uroman
         # If a sequence of digits is found, create a new edge
         if sub_edges.length >= 2
           new_value = new_value_s.include?('.') ? new_value_s.to_f : new_value_s.to_i
-          new_edge = NumEdge.new(sub_edges.first.start, sub_edges.last.end, new_value.to_s, data, active: true)
+          new_edge = NumEdge.new(sub_edges.first.start, sub_edges.last.finish, new_value.to_s, data, active: true)
           new_edge.update(value: new_value, value_s: new_value_s, n_decimals: n_decimals, num_base: 1, e_type: 'D1', script: sub_edges.last.script)
           add_edge(new_edge)
           num_edges = update_edge_list(num_edges, new_edge, sub_edges)
@@ -788,11 +782,11 @@ module Uroman
       num_edges.each do |edge|
         next unless edge.is_a?(NumEdge) && edge.active && edge.num_base == 1 && edge.value.is_a?(Integer) && edge.value >= 1
 
-        right_edge = best_right_neighbor_edge(edge.end, skip_num_edge: false)
+        right_edge = best_right_neighbor_edge(edge.finish, skip_num_edge: false)
 
         if right_edge.is_a?(NumEdge) && right_edge.active && right_edge.value.is_a?(Integer) && right_edge.num_base > 1 && !right_edge.is_large_power
           new_value = edge.value * right_edge.value
-          new_edge = NumEdge.new(edge.start, right_edge.end, new_value.to_s, data, active: true)
+          new_edge = NumEdge.new(edge.start, right_edge.finish, new_value.to_s, data, active: true)
           new_edge.update(value: new_value, num_base: right_edge.num_base, e_type: 'G1', orig_txt: edge.orig_txt + right_edge.orig_txt, script: right_edge.script)
           add_edge(new_edge)
           num_edges = update_edge_list(num_edges, new_edge, [edge, right_edge])
@@ -810,7 +804,7 @@ module Uroman
 
         # Combine consecutive number groups
         loop do
-          right_edge = best_right_neighbor_edge(prev_edge.end, skip_num_edge: false)
+          right_edge = best_right_neighbor_edge(prev_edge.finish, skip_num_edge: false)
           break unless right_edge.is_a?(NumEdge) && right_edge.active && right_edge.value.is_a?(Integer) && !right_edge.is_large_power
 
           if is_gap_null_edge(prev_non_edge) || (prev_non_edge.num_base > right_edge.value && prev_non_edge.num_base > right_edge.num_base)
@@ -825,7 +819,7 @@ module Uroman
         # Create a new edge for the combined number group
         if sub_edges.length >= 2
           new_value = sub_edges.sum(&:value)
-          new_edge = NumEdge.new(sub_edges.first.start, sub_edges.last.end, new_value.to_s, data, active: true)
+          new_edge = NumEdge.new(sub_edges.first.start, sub_edges.last.finish, new_value.to_s, data, active: true)
           new_edge.update(value: new_value, num_base: sub_edges.last.num_base, e_type: 'G2', orig_txt: sub_edges.map(&:orig_txt).join, script: sub_edges.last.script)
           add_edge(new_edge)
           num_edges = update_edge_list(num_edges, new_edge, sub_edges)
@@ -838,13 +832,13 @@ module Uroman
       num_edges.each do |edge|
         next unless edge.is_a?(NumEdge) && edge.active && !edge.is_large_power
 
-        right_edge = best_right_neighbor_edge(edge.end, skip_num_edge: false)
+        right_edge = best_right_neighbor_edge(edge.finish, skip_num_edge: false)
 
         if right_edge.is_a?(NumEdge) && right_edge.active && right_edge.value.is_a?(Integer) && right_edge.num_base > 1
           new_value = (edge.value * right_edge.value).round(5)
           new_value = new_value.to_i if new_value.to_i == new_value
 
-          new_edge = NumEdge.new(edge.start, right_edge.end, new_value.to_s, data, active: true)
+          new_edge = NumEdge.new(edge.start, right_edge.finish, new_value.to_s, data, active: true)
           new_edge.update(value: new_value, num_base: right_edge.num_base, e_type: 'G3', orig_txt: edge.orig_txt + right_edge.orig_txt, script: right_edge.script)
           add_edge(new_edge)
           num_edges = update_edge_list(num_edges, new_edge, [edge, right_edge])
@@ -857,32 +851,32 @@ module Uroman
     # add a fallback edge based on type, romanization of single char, or original char.
     def add_rom_fall_back_singles(**_args)
       (0...@max_vertex).each do |start|
-        end_pos = start + 1
+        finish = start + 1
         orig_char = @s[start]
-        unless @lattice[[start, end_pos]]
+        unless @lattice[[start, finish]]
           rom, edge_annotation = orig_char, 'orig'
           if data.char_is_nonspacing_mark?(rom)
             rom, edge_annotation = '', 'Mn'
           elsif data.char_is_format_char?(rom) # e.g. zero-width non-joiner, zero-width joiner
             rom, edge_annotation = '', 'Cf'
-          elsif UnicodeUtils.category(orig_char) == 'Co'
+          elsif Unicode::Category.of(orig_char) == 'Co'
             rom, edge_annotation = '', 'Co'
           elsif rom == ' '
             edge_annotation = 'orig'
-          elsif (rom2 = simple_top_romanization_candidate_for_span(start, end_pos))
+          elsif (rom2 = simple_top_romanization_candidate_for_span(start, finish))
             rom = rom2
             rom = rom[1..] if rom.match?(/^\+(m|ng|n|h|r)/)
             edge_annotation = 'rom single'
           end
-          add_edge(Edge.new(start, end_pos, rom, edge_annotation))
+          add_edge(Edge.new(start, finish, rom, edge_annotation))
         end
       end
     end
 
-    def self.add_new_edge(old_edges, start, end_pos, new_rom, new_type, position, old_edge_dict)
-      key = [start, end_pos, new_rom]
+    def self.add_new_edge(old_edges, start, finish, new_rom, new_type, position, old_edge_dict)
+      key = [start, finish, new_rom]
       unless old_edge_dict[key]
-        new_edge = Edge.new(start, end_pos, new_rom, new_type)
+        new_edge = Edge.new(start, finish, new_rom, new_type)
         if position.nil?
           old_edges << new_edge
         else
@@ -894,13 +888,13 @@ module Uroman
 
     def add_alternatives(old_edges)
       old_edge_dict = {}
-      old_edges.each { |old_edge| old_edge_dict[[old_edge.start, old_edge.end, old_edge.txt]] = old_edge }
+      old_edges.each { |old_edge| old_edge_dict[[old_edge.start, old_edge.finish, old_edge.txt]] = old_edge }
 
       old_edges.each_with_index do |old_edge, position|
         next if old_edge.type.start_with?('rom-alt')
 
-        start, end_pos = old_edge.start, old_edge.end
-        orig_s = @s[start...end_pos]
+        start, finish = old_edge.start, old_edge.finish
+        orig_s = @s[start...finish]
         old_rom = old_edge.txt
 
         if (m = old_edge.type.match(/\bc:([a-z]+)\s+s:([a-z]+)\b/))
@@ -911,7 +905,7 @@ module Uroman
 
         data.rom_rules[orig_s].each do |rom_rule|
           rom_t = rom_rule['t']
-          next unless cand_is_valid?(rom_rule, start, end_pos, rom_t)
+          next unless cand_is_valid(rom_rule, start, finish, rom_t)
 
           rom_alts = rom_rule['t-alts']
           rom_end_of_syllable = rom_rule['t-at-end-of-syllable']
@@ -919,16 +913,16 @@ module Uroman
           if (rom_t == old_rom || rom_t == old_rom_core) && rom_alts
             rom_alts.each do |rom_alt|
               rom_alt += old_rom_suffix if old_rom_suffix && rom_t == old_rom_core
-              self.class.add_new_edge(old_edges, start, end_pos, rom_alt, 'rom-alt', position, old_edge_dict)
+              self.class.add_new_edge(old_edges, start, finish, rom_alt, 'rom-alt', position, old_edge_dict)
             end
           end
 
           if rom_t == old_rom && rom_end_of_syllable
-            self.class.add_new_edge(old_edges, start, end_pos, rom_t, 'rom-alt2', position, old_edge_dict)
+            self.class.add_new_edge(old_edges, start, finish, rom_t, 'rom-alt2', position, old_edge_dict)
           end
 
           if rom_end_of_syllable == old_rom
-            self.class.add_new_edge(old_edges, start, end_pos, rom_t, 'rom-alt3', position, old_edge_dict)
+            self.class.add_new_edge(old_edges, start, finish, rom_t, 'rom-alt3', position, old_edge_dict)
           end
         end
       end
@@ -936,10 +930,12 @@ module Uroman
 
     def all_edges(start, finish)
       result = []
-      (start...finish).each do |i|
-        (i + 1..finish).each do |j|
-          @lattice[[i, j]].each do |edge|
-            result << edge
+      (start...finish).each do |start2|
+        @lattice[[start2, 'right']].sort.reverse_each do |finish2|
+          if finish2 <= finish
+            result.concat(@lattice[[start2, finish2]])
+          else
+            break
           end
         end
       end
@@ -1014,7 +1010,7 @@ module Uroman
       while start < finish2
         old_finish2 = finish2
         if (new_edge = best_left_neighbor_edge(finish2, skip_num_edge: skip_num_edge))
-          result_edges = [new_edge] + result_edges
+          result_edges.unshift(new_edge)
           rom = new_edge.txt + rom
           finish2 = new_edge.start
         end

@@ -6,10 +6,10 @@ require 'json'
 require 'gc'
 require 'pp'
 
+require_relative '../uroman'
+
 module Uroman
   class Cli
-    PROFILE_FLAG = '--profile' # TODO: what is this for?
-
     def initialize
       @options = {
         rom_format: 'str',
@@ -95,8 +95,3 @@ module Uroman
     end
   end
 end
-
-# TODO: make this a cli
-# if __FILE__ == $PROGRAM_NAME
-#   Cli.new.run
-# end

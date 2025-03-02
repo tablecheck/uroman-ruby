@@ -414,7 +414,7 @@ module Uroman
             result = ""
 
             cluster.each_char do |char|
-              if lat.char_is_vowel_sign(char)
+              if lat.char_is_vowel_sign?(char)
                 has_vowel = true
                 # Apply vowel rules based on the script
               elsif lat.char_is_regular_letter(char)
