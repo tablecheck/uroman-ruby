@@ -25,7 +25,9 @@ Gem::Specification.new do |s|
   }
 
   s.required_ruby_version = '>= 3.0'
-  s.add_dependency('unicode', '>= 0.4.4')
+  s.add_dependency('unicode-name')
+  s.add_dependency('unicode-numeric_value')
+  s.add_dependency('unicode-types')
 
   s.files = Dir.glob('lib/**/*') + %w[LICENSE.txt README.md]
   s.require_path = 'lib'

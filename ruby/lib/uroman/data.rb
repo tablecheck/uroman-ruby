@@ -1,5 +1,13 @@
 # frozen_string_literal: true
 
+require 'set'
+require 'json'
+require 'unicode/types'
+
+require_relative 'util'
+require_relative 'dict'
+require_relative 'lattice'
+
 module Uroman
   class Data
     DEFAULT_ROM_MAX_CACHE_SIZE = 65536
@@ -10,6 +18,10 @@ module Uroman
     HANGUL_LEADS = %w[g gg n d dd r m b bb s ss - j jj c k t p h].freeze
     HANGUL_VOWELS = %w[a ae ya yae eo e yeo ye o wa wai oe yo u weo we wi yu eu yi i].freeze
     HANGUL_TAILS = %w[- g gg gs n nj nh d l lg lm lb ls lt lp lh m b bs s ss ng j c k t p h].freeze
+    # TODO: check this Jamo tables
+    # initials = %w[g kk n d tt r m b pp s ss _ j jj ch k t p h]
+    # medials = %w[a ae ya yae eo e yeo ye o wa wae oe yo u wo we wi yu eu yi i]
+    # finals = [''] + %w[g k kk k n n j t l l m p p l s s ng j ch ch k t p h]
 
     # This class loads and maintains uroman data independent of any specific text corpus.
     # Typically, only a single instance will be used. (In contrast to multiple lattice instances, one per text.)
@@ -38,12 +50,12 @@ module Uroman
                   :n_error_messages_output,
                   :n_non_utf8_characters
 
-    def initialize(data_dir: nil, **args)
-      @data_dir = data_dir || self.class.default_data_dir(**args)
+    def initialize(data_dir = nil, **args)
+      @data_dir = data_dir || default_data_dir(**args)
       @rom_rules = Hash.new { |h, k| h[k] = [] }
       @scripts = Hash.new { |h, k| h[k] = Script.new }
       @dict_bool = Hash.new(false)
-      @dict_str = Hash.new { |h, k| h[k] = +'' } # TODO: check this!!!
+      @dict_str = Hash.new { |h, k| h[k] = {} }
       @dict_int = Hash.new(0)
       @dict_num = Hash.new(nil) # values are int (most common), float, or string ("1/2")
       @num_props = Hash.new { |h, k| h[k] = {} }
@@ -68,8 +80,8 @@ module Uroman
 
     def self.default_data_dir(**args)
       root_dir = File.expand_path(File.dirname(__FILE__))
-      data_dir = File.expand_path("data", root_dir)
-      mini_test_dir = File.expand_path("mini-test", root_dir)
+      data_dir = File.expand_path('data', root_dir)
+      mini_test_dir = File.expand_path('mini-test', root_dir)
       if args[:verbose]
         warn "data_dir: #{data_dir}"
         warn "mini_test_dir: #{mini_test_dir}"
@@ -81,15 +93,15 @@ module Uroman
       @rom_cache = {}
       @rom_cache_size = 0
       @rom_max_cache_size = cache_size
-      @cache_p = (@rom_max_cache_size != 0)
+      @cache_p = (cache_size != 0)
     end
 
     def second_rom_filter(c, rom, name = nil)
       return [c, name] if rom.nil? || !rom.include?(" ")
       name ||= chr_name(c)
-      if name.include?("MYANMAR VOWEL SIGN KAYAH")
+      if name.include?('MYANMAR VOWEL SIGN KAYAH')
         return [$1, name] if rom.match(/kayah\s+(\S+)\s*$/)
-      elsif name.include?("MENDE KIKAKUI SYLLABLE")
+      elsif name.include?('MENDE KIKAKUI SYLLABLE')
         return [$1, name] if rom.match(/m\d+\s+(\S+)\s*$/)
       elsif rom.match(/\S\s+\S/)
         return [c, name]
@@ -396,7 +408,7 @@ module Uroman
           while codepoint < 0xF0000
             codepoint += 1
             char = codepoint.chr(Encoding::UTF_8)
-            num = first_non_none(ud_numeric(char), num_value(char))
+            num = first_non_nil(ud_numeric(char), num_value(char))
             next if num.nil?
 
             result_dict = {}
@@ -447,22 +459,22 @@ module Uroman
                        end
 
             rom = "#{value}#{fraction ? " #{fraction.numerator}/#{fraction.denominator}" : ''}".strip
-            add_non_none_to_dict(result_dict, 'txt', orig_txt)
-            add_non_none_to_dict(result_dict, 'rom', rom)
-            add_non_none_to_dict(result_dict, 'value', value)
-            add_non_none_to_dict(result_dict, 'fraction', fraction ? [fraction.numerator, fraction.denominator] : nil)
-            add_non_none_to_dict(result_dict, 'type', num_type)
+            add_non_nil_to_hash(result_dict, 'txt', orig_txt)
+            add_non_nil_to_hash(result_dict, 'rom', rom)
+            add_non_nil_to_hash(result_dict, 'value', value)
+            add_non_nil_to_hash(result_dict, 'fraction', fraction ? [fraction.numerator, fraction.denominator] : nil)
+            add_non_nil_to_hash(result_dict, 'type', num_type)
             result_dict['is-large-power'] = true if is_large_power
-            add_non_none_to_dict(result_dict, 'base', num_base)
-            add_non_none_to_dict(result_dict, 'mult', base_multiplier)
-            add_non_none_to_dict(result_dict, 'script', script)
+            add_non_nil_to_hash(result_dict, 'base', num_base)
+            add_non_nil_to_hash(result_dict, 'mult', base_multiplier)
+            add_non_nil_to_hash(result_dict, 'script', script)
 
             if num_type.start_with?('other')
-              add_non_none_to_dict(result_dict, 'name', name)
+              add_non_nil_to_hash(result_dict, 'name', name)
               f_err.puts result_dict.to_json
               n_err += 1
             else
-              add_non_none_to_dict(result_dict, 'name', name) unless script
+              add_non_nil_to_hash(result_dict, 'name', name) unless script
               f_out.puts result_dict.to_json
               n_out += 1
             end

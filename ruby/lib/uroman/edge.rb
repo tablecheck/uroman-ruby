@@ -1,22 +1,23 @@
 # frozen_string_literal: true
 
+require 'json'
+
 module Uroman
+  # This class defines edges that span part of a sentence with a specific romanization.
+  # There might be multiple edges for a given span. The edges in turn are part of the
+  # romanization lattice.
   class Edge
-    # This class defines edges that span part of a sentence with a specific romanization.
-    # There might be multiple edges for a given span. The edges in turn are part of the
-    # romanization lattice.
+    attr_accessor :start, :finish, :txt, :type
 
-    attr_accessor :start, :end, :txt, :type
-
-    def initialize(start, end_pos, txt, annotation = nil)
+    def initialize(start, finish, s, annotation = nil)
       @start = start
-      @end = end_pos
-      @txt = txt
+      @finish = finish
+      @txt = s
       @type = annotation
     end
 
     def to_s
-      "[#{@start}-#{@end}] #{@txt} (#{@type})"
+      "[#{@start}-#{@finish}] #{@txt} (#{@type})"
     end
 
     def inspect
@@ -24,13 +25,25 @@ module Uroman
     end
 
     def to_json(*_args)
-      [@start, @end, @txt, @type].to_json
+      JSON.generate([@start, @finish, @txt, @type])
     end
 
     def self.json_str(rom_result)
-      return rom_result if rom_result.is_a?(String)
-
-      "[#{rom_result.map { |edge| edge.is_a?(Edge) ? edge.to_json : edge.to_s }.join}]"
+      if rom_result.is_a?(String)
+        rom_result
+      else
+        result = +'['
+        rom_result.each do |edge|
+          if edge.is_a?(Edge)
+            result += edge.to_json
+          else
+            result += edge.to_s
+          end
+          result += ','
+        end
+        result.chomp!(',')
+        result + ']'
+      end
     end
   end
-end
+end 
