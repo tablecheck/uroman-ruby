@@ -3,46 +3,43 @@
 module Uroman
   # Base class for simple dictionary-like objects
   class Dict
-    def initialize(**kwargs)
-      # Store all keyword arguments as instance variables
-      kwargs.each do |key, value|
-        instance_variable_set("@#{key}", value)
+    def initialize(**kw_args)
+      @data = {}
+
+      kw_args.each do |key, value|
+        key2 = key.to_s.tr('_', '-')
+        @data[key2] = value unless value.nil? || value == [] || value == false
       end
     end
 
     def inspect
-      instance_variables.map { |var| "#{var}=#{instance_variable_get(var)}" }.join(" ")
+      @data.map { |k, v| "#{k}=#{v}" }.join(' ')
     end
 
-    def [](key, default = nil)
-      instance_variable_defined?("@#{key}") ? instance_variable_get("@#{key}") : default
+    def [](key)
+      @data[key.to_s]
     end
 
     def empty?
-      instance_variables.empty?
+      @data.empty?
+    end
+
+    def to_h
+      @data
     end
   end
 
   # Romanization rule with source and target strings
+  # key: source string
+  # typical attributes: s (source), t (target), prov (provenance), lcodes (language codes)
+  # t_alts=t_alts (target alternatives), use_only_at_start_of_word, dont_use_at_start_of_word,
+  # use_only_at_end_of_word, dont_use_at_end_of_word, use_only_for_whole_word
   class RomRule < Dict
-    attr_accessor :source, :target, :type, :context, :lcode
-
-    def initialize(**kwargs)
-      super
-      @type ||= nil
-      @context ||= nil
-      @lcode ||= nil
-    end
   end
 
   # Script metadata
+  # key: lower case script_name
+  # typical attributes: script_name, direction, abugida_default_vowels, alt_script_names, languages
   class Script < Dict
-    attr_accessor :name, :default_vowel, :abugida
-
-    def initialize(**kwargs)
-      super
-      @default_vowel ||= nil
-      @abugida ||= false
-    end
   end
 end 

@@ -2,13 +2,16 @@
 
 require 'set'
 require 'json'
-require 'unicode/types'
 
 require_relative 'util'
 require_relative 'dict'
 require_relative 'lattice'
 
 module Uroman
+  # This class loads and maintains uroman data independent of any specific text corpus.
+  # Typically, only a single instance will be used. (In contrast to multiple lattice instances, one per text.)
+  # Methods include some testing. And finally methods to romanize a string (romanize_string) or an entire file
+  # (romanize_file).
   class Data
     DEFAULT_ROM_MAX_CACHE_SIZE = 65536
     ROM_FORMAT_STR = 'str'
@@ -23,10 +26,6 @@ module Uroman
     # medials = %w[a ae ya yae eo e yeo ye o wa wae oe yo u wo we wi yu eu yi i]
     # finals = [''] + %w[g k kk k n n j t l l m p p l s s ng j ch ch k t p h]
 
-    # This class loads and maintains uroman data independent of any specific text corpus.
-    # Typically, only a single instance will be used. (In contrast to multiple lattice instances, one per text.)
-    # Methods include some testing. And finally methods to romanize a string (romanize_string) or an entire file
-    # (romanize_file).
     attr_accessor :data_dir,
                   :rom_rules,
                   :scripts,
