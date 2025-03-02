@@ -60,7 +60,7 @@ puts result  # => "iran"
 # Edges format (provides character positions)
 edges = uroman.romanize_string('ایران', lcode: 'fas', rom_format: 'edges')
 edges.each do |edge|
-  puts "#{edge.start}-#{edge.end}: #{edge.txt}"
+  puts "#{edge.start}-#{edge.finish}: #{edge.txt}"
 end
 
 # Alternative romanizations

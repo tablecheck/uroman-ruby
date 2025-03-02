@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
-require 'spec_helper'
+require_relative '../spec_helper'
+require 'uroman/cli'
 require 'stringio'
 
 RSpec.describe Uroman::Cli do
@@ -61,7 +62,7 @@ RSpec.describe Uroman::Cli do
       cli = Uroman::Cli.new
       
       # Mock romanize_string to return a fixed value
-      allow_any_instance_of(Uroman::Uroman).to receive(:romanize_string).and_return('Igor')
+      allow_any_instance_of(Uroman::Data).to receive(:romanize_string).and_return('Igor')
       
       # We need to mock JSON.generate to avoid errors in the test
       allow(JSON).to receive(:generate).and_return('"Igor"')
@@ -95,7 +96,7 @@ RSpec.describe Uroman::Cli do
 
     it 'demonstrates romanization of sample strings' do
       # Mock romanize_string to return predictable values
-      allow_any_instance_of(Uroman::Uroman).to receive(:romanize_string).and_return('romanized')
+      allow_any_instance_of(Uroman::Data).to receive(:romanize_string).and_return('romanized')
       
       ARGV.replace([])
       cli = Uroman::Cli.new

@@ -3,7 +3,6 @@
 require 'optparse'
 require 'pathname'
 require 'json'
-require 'gc'
 require 'pp'
 
 require_relative '../uroman'
@@ -48,7 +47,7 @@ module Uroman
         opts.on('--silent', 'Suppress progress output') { @options[:silent] += 1 }
         opts.on('-a', '--ablation STRING', String, 'Development mode options') { |v| @options[:ablation] = v }
         opts.on('--stats', 'Enable statistics mode') { @options[:stats] += 1 }
-        opts.on('--ignore_args', 'For usage illustration only') { @options[:ignore_args] = true }
+        # opts.on('--ignore_args', 'For usage illustration only') { @options[:ignore_args] = true }
         opts.on('--version', 'Show version information') do
           puts "uroman #{Uroman::VERSION}   last modified: #{Uroman::LAST_MOD_DATE}"
           exit
@@ -67,7 +66,7 @@ module Uroman
     end
 
     def test_sample_calls
-      uroman = Uroman.new(@options[:data_dir])
+      uroman = Uroman::Data.new(@options[:data_dir])
       samples = ['Игорь', 'ちょっとまってください', 'ka‍n‍ne', 'महात्मा गांधी']
       samples.each do |s|
         puts "#{s} => #{uroman.romanize_string(s)}"
@@ -75,7 +74,7 @@ module Uroman
     end
 
     def process_inputs
-      uroman = Uroman.new(@options[:data_dir], **@options)
+      uroman = Uroman::Data.new(@options[:data_dir], **@options)
 
       if @direct_input.any?
         @direct_input.each do |s|

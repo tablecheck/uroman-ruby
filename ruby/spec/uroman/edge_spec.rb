@@ -1,13 +1,13 @@
 # frozen_string_literal: true
 
-require 'spec_helper'
+require_relative '../spec_helper'
 
 RSpec.describe Uroman::Edge do
   describe '#initialize' do
     it 'creates a new edge with the given parameters' do
       edge = Uroman::Edge.new(0, 3, 'abc', 'test')
       expect(edge.start).to eq(0)
-      expect(edge.end).to eq(3)
+      expect(edge.finish).to eq(3)
       expect(edge.txt).to eq('abc')
       expect(edge.type).to eq('test')
     end

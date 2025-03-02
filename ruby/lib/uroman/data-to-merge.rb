@@ -98,8 +98,8 @@ module Uroman
         # Deep copy the edge list and update offsets
         cached_rom_result.map do |edge|
           new_edge = edge.is_a?(NumEdge) ?
-                       NumEdge.new(edge.start + offset, edge.end + offset, edge.txt) :
-                       Edge.new(edge.start + offset, edge.end + offset, edge.txt, edge.type)
+                       NumEdge.new(edge.start + offset, edge.finish + offset, edge.txt) :
+                       Edge.new(edge.start + offset, edge.finish + offset, edge.txt, edge.type)
 
           # Copy additional properties for NumEdge
           if edge.is_a?(NumEdge)
@@ -591,36 +591,36 @@ module Uroman
       c
     end
 
-    def romanize_string(s, lcode = nil, rom_format = ROM_FORMAT_STR, **args)
-      lcode = lcode || args[:lcode]
+    def romanize_string(s, lcode = nil, rom_format = ROM_FORMAT_STR, **kwargs)
+      lcode = lcode || kwargs[:lcode]
 
       # Handle nil input
-      s = "" if s.nil?
+      s = '' if s.nil?
 
       # Return empty string for empty input
-      return "" if s.empty?
+      return '' if s.empty?
 
-      if args[:decode_unicode]
+      if kwargs[:decode_unicode]
         s = Util.decode_unicode_escapes(s)
       end
 
       if @cache_p
         rest = s
         offset = 0
-        result = rom_format == ROM_FORMAT_STR ? "" : []
+        result = rom_format == ROM_FORMAT_STR ? '' : []
 
         while (m = rest.match(/(.*?)([.,; ]*[ 。་][.,; ]*)(.*)/))
           pre, delimiter, rest = m[1], m[2], m[3]
-          result += romanize_string_core(pre, lcode, rom_format, offset, **args)
+          result += romanize_string_core(pre, lcode, rom_format, offset, **kwargs)
           offset += pre.length
-          result += romanize_string_core(delimiter, lcode, rom_format, offset, **args)
+          result += romanize_string_core(delimiter, lcode, rom_format, offset, **kwargs)
           offset += delimiter.length
         end
 
-        result += romanize_string_core(rest, lcode, rom_format, offset, **args)
+        result += romanize_string_core(rest, lcode, rom_format, offset, **kwargs)
         return result
       else
-        return romanize_string_core(s, lcode, rom_format, 0, **args)
+        return romanize_string_core(s, lcode, rom_format, 0, **kwargs)
       end
     end
 

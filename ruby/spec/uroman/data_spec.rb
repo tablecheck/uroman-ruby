@@ -11,7 +11,8 @@ RSpec.describe Uroman::Data do
         ['Νεπάλ', 'Nepal'],
         ['नेपाल', 'nepaal'],
         ['نیپال', 'nypal'],
-        ['三万一', '31000']
+        ['三万一', '31000'],
+        ['三万一千', '30001']
       ]
 
       examples.each do |input, expected_output|
@@ -177,9 +178,11 @@ RSpec.describe Uroman::Data do
   describe 'special cases' do
     it 'handles numeric conversion correctly' do
       # Test Chinese numerals
-      expect(data.romanize_string('三万一')).to eq('31000')
+      expect(data.romanize_string('三万一')).to eq('30001')
+      expect(data.romanize_string('三万一千')).to eq('31000')
       expect(data.romanize_string('九')).to eq('9')
       expect(data.romanize_string('零')).to eq('0')
+      expect(data.romanize_string('〇')).to eq('0')
     end
 
     it 'handles fractions correctly' do

@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require 'unicode/categories'
+
 require_relative 'edge'
 require_relative 'num_edge'
 require_relative 'util'
@@ -54,6 +56,18 @@ module Uroman
         end
       end
       edges.join(' ')
+    end
+
+    def self.char_is_nonspacing_mark?(s)
+      s.length == 1 && Unicode::Categories.of(s).include?('Mn')
+    end
+
+    def self.char_is_format_char?(s)
+      s.length == 1 && Unicode::Categories.of(s).include?('Cf')
+    end
+
+    def self.char_is_space_separator?(s)
+      s.length == 1 && Unicode::Categories.of(s).include?('Zs')
     end
 
     def self.char_is_braille?(c)
@@ -116,7 +130,7 @@ module Uroman
         return false
       end
 
-      while (start + 1 < @max_vertex) && data.char_is_nonspacing_mark?(@s[start]) && data.chr_name(@s[start]).include?('NUKTA')
+      while (start + 1 < @max_vertex) && self.class.char_is_nonspacing_mark?(@s[start]) && data.chr_name(@s[start]).include?('NUKTA')
         start += 1
       end
 
@@ -302,7 +316,7 @@ module Uroman
       [rom, start, finish, annot]
     end
 
-    def prep_braille(**_args)
+    def prep_braille(**_kwargs)
       return unless @contains_script['Braille']
 
       dots6 = "\u2820" # Characters in the following word are uppercase
@@ -491,9 +505,9 @@ module Uroman
       return base_rom if data.dict_bool[['is-vowel-sign', next_s_char]]
       return base_rom if data.dict_bool[['is-medial-consonant-sign', next_s_char]]
       return base_rom if char_is_subjoined_letter?(next_s_char)
-      return base_rom if data.char_is_nonspacing_mark?(next_s_char) && data.dict_bool[['is-vowel-sign', next2_s_char]]
+      return base_rom if self.class.char_is_nonspacing_mark?(next_s_char) && data.dict_bool[['is-vowel-sign', next2_s_char]]
       return base_rom if data.dict_bool[['is-virama', next_s_char]]
-      return base_rom if data.char_is_nonspacing_mark?(next_s_char) && data.dict_bool[['is-virama', next2_s_char]]
+      return base_rom if self.class.char_is_nonspacing_mark?(next_s_char) && data.dict_bool[['is-virama', next2_s_char]]
       return base_rom_plus_vowel if data.dict_bool[['is-virama', prev_s_char]]
       return base_rom_plus_vowel if is_at_start_of_word?(start) && !rom.match?(/r[aeiou]/)
 
@@ -575,7 +589,7 @@ module Uroman
     def decomp_rom(char_position)
       char = @s[char_position]
       rom = nil
-      if (ud_decomp_s = char.unicode_normalize(:NFD))
+      if (ud_decomp_s = char.unicode_normalize(:nfd))
         format_comps = []
         other_comps = []
         decomp_s = ''
@@ -673,7 +687,7 @@ module Uroman
       result
     end
 
-    def self.edge_is_digit(edge)
+    def self.edge_is_digit?(edge)
       edge.is_a?(NumEdge) && edge.value.is_a?(Integer) && edge.type == 'digit' && (0..9).cover?(edge.value) && (edge.finish - edge.start == 1)
     end
 
@@ -686,13 +700,13 @@ module Uroman
       position ? position.to_s : nil
     end
 
-    def add_braille_number(start, finish, txt, **_args)
+    def add_braille_number(start, finish, txt, **_kwargs)
       new_edge = NumEdge.new(start, finish, txt, data)
       new_edge.type = 'number'
       add_edge(new_edge)
     end
 
-    def add_braille_numbers(**_args)
+    def add_braille_numbers(**_kwargs)
       if @contains_script['Braille']
         s = @s
         num_s, start = '', nil
@@ -715,7 +729,7 @@ module Uroman
     end
 
     # Adds a numerical romanization edge to the romanization lattice, currently just for digits.
-    def add_numbers(data, verbose: false)
+    def add_numbers(data, verbose: false, **_kwargs)
       s = @s
       num_edges = []
 
@@ -731,7 +745,7 @@ module Uroman
 
       # D1 sequence of digits 1234
       num_edges.each do |edge|
-        next unless edge_is_digit(edge) && edge.active
+        next unless self.class.edge_is_digit?(edge) && edge.active
 
         n_decimal_points = 0
         n_decimals = nil
@@ -743,7 +757,7 @@ module Uroman
         loop do
           right_edge = best_right_neighbor_edge(prev_edge.finish)
 
-          if edge_is_digit(right_edge)
+          if self.class.edge_is_digit?(right_edge)
             sub_edges << right_edge
             new_value_s += right_edge.value.to_s
             n_decimals += 1 if n_decimals
@@ -751,7 +765,7 @@ module Uroman
           elsif prev_edge.finish < s.length && s[prev_edge.finish] == '.' && n_decimal_points.zero?
             right_edge2 = best_right_neighbor_edge(prev_edge.finish + 1)
 
-            if right_edge2 && edge_is_digit(right_edge2)
+            if right_edge2 && self.class.edge_is_digit?(right_edge2)
               right_edge ||= Edge.new(prev_edge.finish, prev_edge.finish + 1, s[prev_edge.finish], 'decimal period')
               add_edge(right_edge)
               sub_edges.concat([right_edge, right_edge2])
@@ -849,15 +863,15 @@ module Uroman
 
     # For characters in the original string not covered by romanizations and numbers,
     # add a fallback edge based on type, romanization of single char, or original char.
-    def add_rom_fall_back_singles(**_args)
+    def add_rom_fall_back_singles(**_kwargs)
       (0...@max_vertex).each do |start|
         finish = start + 1
         orig_char = @s[start]
         unless @lattice[[start, finish]]
           rom, edge_annotation = orig_char, 'orig'
-          if data.char_is_nonspacing_mark?(rom)
+          if self.class.char_is_nonspacing_mark?(rom)
             rom, edge_annotation = '', 'Mn'
-          elsif data.char_is_format_char?(rom) # e.g. zero-width non-joiner, zero-width joiner
+          elsif self.class.char_is_format_char?(rom) # e.g. zero-width non-joiner, zero-width joiner
             rom, edge_annotation = '', 'Cf'
           elsif Unicode::Category.of(orig_char) == 'Co'
             rom, edge_annotation = '', 'Co'

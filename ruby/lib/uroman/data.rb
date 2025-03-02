@@ -15,10 +15,12 @@ module Uroman
   # (romanize_file).
   class Data
     DEFAULT_ROM_MAX_CACHE_SIZE = 65536
+
     ROM_FORMAT_STR = 'str'
     ROM_FORMAT_EDGES = 'edges'
     ROM_FORMAT_ALTS = 'alts'
     ROM_FORMAT_LATTICE = 'lattice'
+
     HANGUL_LEADS = %w[g gg n d dd r m b bb s ss - j jj c k t p h].freeze
     HANGUL_VOWELS = %w[a ae ya yae eo e yeo ye o wa wai oe yo u weo we wi yu eu yi i].freeze
     HANGUL_TAILS = %w[- g gg gs n nj nh d l lg lm lb ls lt lp lh m b bs s ss ng j c k t p h].freeze
@@ -50,12 +52,12 @@ module Uroman
                   :n_error_messages_output,
                   :n_non_utf8_characters
 
-    def initialize(data_dir = nil, **args)
-      @data_dir = data_dir || self.class.default_data_dir(**args)
+    def initialize(data_dir = nil, **kwargs)
+      @data_dir = data_dir || self.class.default_data_dir(**kwargs)
       @rom_rules = Hash.new { |h, k| h[k] = [] }
       @scripts = Hash.new { |h, k| h[k] = Script.new }
       @dict_bool = Hash.new(false)
-      @dict_str = Hash.new { |h, k| h[k] = {} }
+      @dict_str = Hash.new { |h, k| h[k] = +'' }
       @dict_int = Hash.new(0)
       @dict_num = Hash.new(nil) # values are int (most common), float, or string ("1/2")
       @num_props = Hash.new { |h, k| h[k] = {} }
@@ -67,22 +69,22 @@ module Uroman
       GC.disable
       @rom_cache = {}
       @rom_cache_size = 0
-      @rom_max_cache_size = args[:cache_size] || 0
+      @rom_max_cache_size = kwargs[:cache_size] || 0
       @cache_p = (@rom_max_cache_size != 0)
       @hangul_rom = {}
       @stats = Hash.new(0)
       @abugida_cache = {}
-      load_resource_files(@data_dir, **args.slice(:load_log, :rebuild_ud_props, :rebuild_num_props))
+      load_resource_files(@data_dir, **kwargs.slice(:load_log, :rebuild_ud_props, :rebuild_num_props))
       GC.enable
       @n_error_messages_output = 0
       @n_non_utf8_characters = 0
     end
 
-    def self.default_data_dir(**args)
+    def self.default_data_dir(**kwargs)
       root_dir = File.expand_path(File.dirname(__FILE__))
       data_dir = File.expand_path('data', root_dir)
       mini_test_dir = File.expand_path('mini-test', root_dir)
-      if args[:verbose]
+      if kwargs[:verbose]
         warn "data_dir: #{data_dir}"
         warn "mini_test_dir: #{mini_test_dir}"
       end
@@ -203,7 +205,6 @@ module Uroman
       @dict_int['max_n_script_name_components'] = max_n_script_name_components if max_n_script_name_components > 0
       warn "Loaded #{n_entries} script descriptions from #{filename} (max_n_scripts_name_components: #{max_n_script_name_components})" if load_log
     end
-
 
     def extract_script_name(script_name_plus, full_char_name = nil)
       return nil if full_char_name && script_name_plus == full_char_name
@@ -534,18 +535,6 @@ module Uroman
       result
     end
 
-    def self.char_is_nonspacing_mark?(s)
-      s.length == 1 && Unicode::Category.of(s) == 'Mn'
-    end
-
-    def self.char_is_format_char?(s)
-      s.length == 1 && Unicode::Category.of(s) == 'Cf'
-    end
-
-    def self.char_is_space_separator?(s)
-      s.length == 1 && Unicode::Category.of(s) == 'Zs'
-    end
-
     def chr_name(char)
       Unicode::Name.of(char)
     rescue StandardError
@@ -585,6 +574,7 @@ module Uroman
       nil
     end
 
+    # For letters, diacritics, numerals etc.
     def chr_script_name(char)
       @dict_str[['script', char]]
     end
@@ -637,13 +627,13 @@ module Uroman
       puts output
     end
 
-    def test_romanization(**args)
+    def test_romanization(**kwargs)
       tests = [['ألاسكا', nil], ['यह एक अच्छा अनुवाद है.', 'hin'],
                ['ちょっとまってください', 'kor'], ['Μπανγκαλόρ', 'ell'],
                ['Зеленський', 'ukr'], ['കേരളം', 'mal']]
       tests.each do |test|
         s, lcode = test
-        rom = romanize_string(s, lcode: lcode, **args)
+        rom = romanize_string(s, lcode: lcode, **kwargs)
         warn "ROM #{s} -> #{rom}"
       end
 
@@ -662,7 +652,7 @@ module Uroman
       warn "#{n_alerts} alerts for roms with spaces"
     end
 
-    def romanize_file(input_filename: nil, output_filename: nil, lcode: nil, direct_input: nil, **args)
+    def romanize_file(input_filename: nil, output_filename: nil, lcode: nil, direct_input: nil, **kwargs)
       f_in = case input_filename
              when nil then direct_input || $stdin
              when String then File.open(input_filename, 'r', encoding: 'utf-8') rescue (warn "Error: Cannot open #{input_filename}"; return)
@@ -676,11 +666,11 @@ module Uroman
               end
 
       f_in.each_with_index do |line, line_number|
-        if line.match?(/\x{DC80}-\x{DCFF}/)
+        if contains_surrogate_chars?(line)
           warn "Encoding error at line #{line_number + 1}"  # Handling surrogate errors
         end
-        f_out.puts romanize_string(line.strip, lcode, **args)
-        break if args[:max_lines] && line_number >= args[:max_lines]
+        f_out.puts romanize_string(line.strip, lcode, **kwargs)
+        break if kwargs[:max_lines] && line_number >= kwargs[:max_lines]
       end
     ensure
       f_in&.close if input_filename
@@ -692,7 +682,7 @@ module Uroman
       return cached_rom_result if offset == 0
 
       cached_rom_result.map do |edge|
-        Edge.new(edge.start + offset, edge.end + offset, edge.txt, edge.type)
+        Edge.new(edge.start + offset, edge.finish + offset, edge.txt, edge.type)
       end
     end
 
@@ -716,19 +706,19 @@ module Uroman
       end
     end
 
-    def romanize_string_core(s, lcode = nil, rom_format = ROM_FORMAT_STR, offset = 0, **args)
+    def romanize_string_core(s, lcode = nil, rom_format = ROM_FORMAT_STR, offset = 0, **kwargs)
       if @cache_p
         cached_rom = @rom_cache[[s, lcode, rom_format]]
         return self.class.apply_any_offset_to_cached_rom_result(cached_rom, offset) if cached_rom
       end
 
-      lat = Lattice.new(s, uroman: self, lcode: lcode)
-      lat.pick_tibetan_vowel_edge(**args)
-      lat.prep_braille(**args)
-      lat.add_romanization(**args)
-      lat.add_numbers(self, **args)
-      lat.add_braille_numbers(**args)
-      lat.add_rom_fall_back_singles(**args)
+      lat = Lattice.new(s, self, lcode)
+      lat.pick_tibetan_vowel_edge(**kwargs)
+      lat.prep_braille(**kwargs)
+      lat.add_romanization(**kwargs)
+      lat.add_numbers(self, **kwargs)
+      lat.add_braille_numbers(**kwargs)
+      lat.add_rom_fall_back_singles(**kwargs)
 
       if rom_format == ROM_FORMAT_LATTICE
         all_edges = lat.all_edges(0, s.length)
@@ -748,8 +738,7 @@ module Uroman
           end
           self.class.apply_any_offset_to_cached_rom_result(best_edges, offset)
         else
-          rom = lat.edge_path_to_surf(best_edges)
-          lat = nil
+          rom = Lattice.edge_path_to_surf(best_edges)
           if @rom_cache_size < @rom_max_cache_size
             @rom_cache[[s, lcode, rom_format]] = rom
             @rom_cache_size += 1
@@ -759,10 +748,10 @@ module Uroman
       end
     end
 
-    def romanize_string(s, lcode = nil, rom_format = ROM_FORMAT_STR, **args)
-      lcode ||= args[:lcode]
-      s = self.class.decode_unicode_escapes(s) if args[:decode_unicode]
-      return romanize_string_core(s, lcode, rom_format, 0, **args) unless @cache_p
+    def romanize_string(s, lcode = nil, rom_format = ROM_FORMAT_STR, **kwargs)
+      lcode ||= kwargs[:lcode]
+      s = self.class.decode_unicode_escapes(s) if kwargs[:decode_unicode]
+      return romanize_string_core(s, lcode, rom_format, 0, **kwargs) unless @cache_p
 
       rest = s
       offset = 0
@@ -770,13 +759,19 @@ module Uroman
 
       while rest =~ /(.*?)([.,; ]*[ 。་][.,; ]*)(.*)$/
         pre, delimiter, rest = $1, $2, $3
-        result += romanize_string_core(pre, lcode, rom_format, offset, **args)
+        result += romanize_string_core(pre, lcode, rom_format, offset, **kwargs)
         offset += pre.length
-        result += romanize_string_core(delimiter, lcode, rom_format, offset, **args)
+        result += romanize_string_core(delimiter, lcode, rom_format, offset, **kwargs)
         offset += delimiter.length
       end
-      result += romanize_string_core(rest, lcode, rom_format, offset, **args)
+      result += romanize_string_core(rest, lcode, rom_format, offset, **kwargs)
       result
+    end
+
+    private
+
+    def contains_surrogate_chars?(str)
+      str.each_codepoint.any? { |cp| cp >= 0xD800 && cp <= 0xDFFF }
     end
   end
 end

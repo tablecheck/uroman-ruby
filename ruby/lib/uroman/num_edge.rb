@@ -45,7 +45,7 @@ module Uroman
           @base_multiplier = d['mult']
           @type = d['type']
           @script = d['script']
-          @is_large_power = d['is-large-power']
+          @is_large_power = d['is-large-power'] || false
           update
         end
       end
@@ -91,7 +91,7 @@ module Uroman
     def to_s
       b_clause = (@base_multiplier ? "#{@base_multiplier}*#{@num_base}" : @num_base.to_s) if @num_base
 
-      out = "#{@active ? '' : ' *'}[#{@start}-#{@end}] #{@orig_txt} R:#{@txt} T:#{@type}"
+      out = "#{@active ? '' : ' *'}[#{@start}-#{@finish}] #{@orig_txt} R:#{@txt} T:#{@type}"
       out << " LP" if @is_large_power
       out << " B:#{b_clause}" if b_clause
       out << " V:#{@value}" if @value&.to_s&.!=(@txt)

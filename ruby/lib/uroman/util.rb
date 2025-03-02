@@ -1,5 +1,6 @@
 # frozen_string_literal: true
 
+require 'unicode/categories'
 require 'unicode/name'
 require 'unicode/numeric_value'
 

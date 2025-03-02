@@ -1,34 +1,34 @@
 # frozen_string_literal: true
 
-require 'spec_helper'
+require_relative '../spec_helper'
 
 RSpec.describe Uroman::Lattice do
-  let(:uroman) { Uroman::Uroman.new }
-  let(:lattice) { Uroman::Lattice.new('test', uroman) }
+  let(:data) { Uroman::Data.new }
+  let(:lattice) { Uroman::Lattice.new('test', data) }
 
   describe '#initialize' do
-    it 'initializes with a string and uroman instance' do
+    it 'initializes with a string and data instance' do
       expect(lattice.s).to eq('test')
-      expect(lattice.uroman).to eq(uroman)
+      expect(lattice.data).to eq(data)
       expect(lattice.max_vertex).to eq(4)
     end
 
     it 'initializes with an optional language code' do
-      lat_with_lcode = Uroman::Lattice.new('test', uroman, 'eng')
+      lat_with_lcode = Uroman::Lattice.new('test', data, 'eng')
       expect(lat_with_lcode.lcode).to eq('eng')
     end
 
     it 'checks for scripts in the input string' do
       # Mock chr_script_name to return a predictable value
-      allow(uroman).to receive(:chr_script_name).and_return('Latin')
+      allow(data).to receive(:chr_script_name).and_return('Latin')
       
-      lat = Uroman::Lattice.new('test', uroman)
+      lat = Uroman::Lattice.new('test', data)
       expect(lat.contains_script['Latin']).to be true
     end
 
     it 'detects Braille in the input string' do
       braille_text = '⠠⠺⠑'
-      lat = Uroman::Lattice.new(braille_text, uroman)
+      lat = Uroman::Lattice.new(braille_text, data)
       expect(lat.contains_script['Braille']).to be true
     end
   end
@@ -57,7 +57,7 @@ RSpec.describe Uroman::Lattice do
   end
 
   describe '#is_at_start_of_word?' do
-    let(:text_lattice) { Uroman::Lattice.new('ab cd', uroman) }
+    let(:text_lattice) { Uroman::Lattice.new('ab cd', data) }
     
     it 'returns true for the first character' do
       expect(text_lattice.is_at_start_of_word?(0)).to be true
@@ -75,7 +75,7 @@ RSpec.describe Uroman::Lattice do
   end
 
   describe '#is_at_end_of_word?' do
-    let(:text_lattice) { Uroman::Lattice.new('ab cd', uroman) }
+    let(:text_lattice) { Uroman::Lattice.new('ab cd', data) }
     
     it 'returns true for the last character in a word' do
       # Add edges to simulate word boundaries
@@ -90,7 +90,7 @@ RSpec.describe Uroman::Lattice do
 
   describe 'edge handling' do
     let(:text) { 'hello' }
-    let(:text_lattice) { Uroman::Lattice.new(text, uroman) }
+    let(:text_lattice) { Uroman::Lattice.new(text, data) }
     
     it 'can find the best edge in a span' do
       edge1 = Uroman::Edge.new(0, 2, 'he', 'rom')
