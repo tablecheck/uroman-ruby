@@ -1,0 +1,10 @@
+require 'rubygems/gem_tasks'
+require 'fileutils'
+
+task :init do
+  FileUtils.cp_r('../LICENSE.txt', 'LICENSE.txt', verbose: true)
+  FileUtils.cp_r('../uroman/data', 'data', verbose: true)
+  # FileUtils.cp_r('../uroman/data-aux', 'data', verbose: true)
+end
+
+Rake::Task['build'].enhance(['init'])

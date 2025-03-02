@@ -30,9 +30,4 @@ require 'uroman/data'
 require 'uroman/cli'
 
 module Uroman
-  DEFAULT_ROM_MAX_CACHE_SIZE = 65536
-  PROFILE_FLAG = '--profile'
-  VERSION = '1.3.1.1'
-  LAST_MOD_DATE = 'June 27, 2024'
-  DESCRIPTION = "uroman is a universal romanizer. It converts text in any script to the standard Latin alphabet."
 end

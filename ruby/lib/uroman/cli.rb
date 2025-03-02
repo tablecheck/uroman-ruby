@@ -8,6 +8,8 @@ require 'pp'
 
 module Uroman
   class Cli
+    PROFILE_FLAG = '--profile' # TODO: what is this for?
+
     def initialize
       @options = {
         rom_format: 'str',
@@ -48,7 +50,7 @@ module Uroman
         opts.on('--stats', 'Enable statistics mode') { @options[:stats] += 1 }
         opts.on('--ignore_args', 'For usage illustration only') { @options[:ignore_args] = true }
         opts.on('--version', 'Show version information') do
-          puts "uroman #{VERSION}   last modified: #{LAST_MOD_DATE}"
+          puts "uroman #{Uroman::VERSION}   last modified: #{Uroman::LAST_MOD_DATE}"
           exit
         end
       end.parse!

@@ -2,6 +2,7 @@
 
 module Uroman
   class Data
+    DEFAULT_ROM_MAX_CACHE_SIZE = 65536
     ROM_FORMAT_STR = 'str'
     ROM_FORMAT_EDGES = 'edges'
     ROM_FORMAT_ALTS = 'alts'
