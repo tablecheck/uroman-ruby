@@ -13,21 +13,5 @@
 # - (3) best romanization with alternatives (as applicable for ambiguous romanization)
 # - (4) best romanization full lattice (all edges, including superseded sub-edges)
 
-require 'date'
-require 'json'
-require 'set'
-require 'unicode'
-require 'optparse'
-require 'bigdecimal'
-require 'bigdecimal/util' # TODO: really?
-
-require 'uroman/util'
-require 'uroman/dict'
-require 'uroman/edge'
-require 'uroman/num_edge'
-require 'uroman/lattice'
-require 'uroman/data'
-require 'uroman/cli'
-
 module Uroman
 end
