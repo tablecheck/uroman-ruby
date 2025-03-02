@@ -25,9 +25,9 @@ module Uroman
       @num_base = nil
       @base_multiplier = nil
       @script = nil
-      @e_type = nil  # one of nil, 'num', 'digit', 'multiplier', 'base', 'sign', 'operator', 'decimal pt'
+      @e_type = nil # one of nil, 'num', 'digit', 'multiplier', 'base', 'sign', 'operator', 'decimal pt'
       @orig_txt = nil
-      
+
       # Deferred initialization via uroman if provided
       if uroman
         n = uroman.num_value(s)

@@ -7,19 +7,20 @@ module Uroman
   module Util
     extend self
 
-    def timer(method)
-      proc do |*args|
-        start_time = Time.now
-        puts "Calling: #{method.name}(#{args})"
-        puts "Start time: #{start_time.strftime('%A, %B %d, %Y at %H:%M')}"
-        result = method.call(*args)
-        end_time = Time.now
-        duration = end_time - start_time
-        puts "End time: #{end_time.strftime('%A, %B %d, %Y at %H:%M')}"
-        puts "Duration: #{duration} seconds"
-        result
-      end
-    end
+    # TODO: not used
+    # def timer(method)
+    #   proc do |*args|
+    #     start_time = Time.now
+    #     puts "Calling: #{method.name}(#{args})"
+    #     puts "Start time: #{start_time.strftime('%A, %B %d, %Y at %H:%M')}"
+    #     result = method.call(*args)
+    #     end_time = Time.now
+    #     duration = end_time - start_time
+    #     puts "End time: #{end_time.strftime('%A, %B %d, %Y at %H:%M')}"
+    #     puts "Duration: #{duration} seconds"
+    #     result
+    #   end
+    # end
 
     # For a given slot, e.g. 'cost', get its value from a line such as '::s1 of course ::s2 ::cost 0.3' -> 0.3
     # The value can be an empty string, as for ::s2 in the example above.

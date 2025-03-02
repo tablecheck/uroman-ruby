@@ -173,7 +173,7 @@ module Uroman
       next_char_rom = first_non_nil(
         simple_top_romanization_candidate_for_span(adj_position, adj_position + 2, simple_search: true),
         simple_top_romanization_candidate_for_span(adj_position, adj_position + 1, simple_search: true),
-        "?"
+        '?'
       )
 
       return [true, "not-followed-by-vowel #{next_char_rom}"] unless next_char_rom.downcase.match?(/[aeiou]/)
@@ -181,7 +181,7 @@ module Uroman
       if next_char == "\u0E2D" && !next_char2.nil?
         next_char2_rom = first_non_nil(
           simple_top_romanization_candidate_for_span(adj_position + 1, adj_position + 2, simple_search: true),
-          "?"
+          '?'
         )
         return [true, 'o-ang-followed-by-vowel'] if next_char2_rom.downcase.match?(/[aeiou]/)
       end
@@ -197,15 +197,13 @@ module Uroman
       # This method contains a number of special romanization heuristics that typically modify
       # an existing or preliminary edge based on context.
       orig_start = start
-      uroman = @uroman
-      full_string = @s
       annot = nil
       return [rom, start, finish, nil] if rom.empty?
 
-      prev_char = start >= 1 ? full_string[start - 1] : ''
-      first_char = full_string[start]
-      last_char = full_string[finish - 1]
-      next_char = finish < full_string.length ? full_string[finish] : ''
+      prev_char = start >= 1 ? @s[start - 1] : ''
+      first_char = @s[start]
+      last_char = @s[finish - 1]
+      next_char = finish < @s.length ? @s[finish] : ''
 
       # \u2820 is the Braille character indicating that the next letter is upper case
       if prev_char == "\u2820" && rom.match?(/[a-z]/)
@@ -219,8 +217,8 @@ module Uroman
       end
 
       # Japanese small tsu (and Gurmukhi addak) used as consonant doubler:
-      if prev_char && 'っッੱ'.include?(prev_char) &&
-        uroman.chr_script_name(prev_char) == uroman.chr_script_name(prev_char) &&
+      if prev_char && "っッ\u0A71".include?(prev_char) &&
+        data.chr_script_name(prev_char) == data.chr_script_name(prev_char) &&
         (m_double_consonant = rom.match(/(ch|[bcdfghjklmnpqrstwz])/))
         if 'っッ'.include?(prev_char) # for Japanese, per Hepburn, use 'tch'
           rom = m_double_consonant[1].gsub('ch', 't') + rom
@@ -228,22 +226,22 @@ module Uroman
           rom = m_double_consonant[1].gsub('ch', 'c') + rom
         end
         start -= 1
-        first_char = full_string[start]
-        prev_char = start >= 1 ? full_string[start - 1] : ''
+        first_char = @s[start]
+        prev_char = start >= 1 ? @s[start - 1] : ''
       end
 
       # Thai
-      if uroman.chr_script_name(first_char) == 'Thai'
+      if data.chr_script_name(first_char) == 'Thai'
         if start + 1 == finish && rom.match?(/[bcdfghjklmnpqrstvwxyz]+$/)
-          if uroman.dict_str[['syllable-info', prev_char]] == 'written-pre-consonant-spoken-post-consonant'
+          if data.dict_str[['syllable-info', prev_char]] == 'written-pre-consonant-spoken-post-consonant'
             [1].each do |vowel_prefix_len|
               if vowel_prefix_len <= start
                 [3, 2, 1].each do |vowel_suffix_len|
-                  if finish + vowel_suffix_len <= full_string.length
-                    pattern = full_string[start - vowel_prefix_len, vowel_prefix_len] +
-                      '-' + full_string[finish, vowel_suffix_len]
-                    if uroman.rom_rules[pattern]
-                      vowel_rom = uroman.rom_rules[pattern][0]['t']
+                  if finish + vowel_suffix_len <= @s.length
+                    pattern = @s[start - vowel_prefix_len, vowel_prefix_len] +
+                      '-' + @s[finish, vowel_suffix_len]
+                    if data.rom_rules[pattern]
+                      vowel_rom = data.rom_rules[pattern][0]['t']
                       return [rom + vowel_rom, start - vowel_prefix_len, finish + vowel_suffix_len, 'rom exp']
                     end
                   end
@@ -252,15 +250,17 @@ module Uroman
             end
           end
         end
-        if uroman.chr_script_name(prev_char) == 'Thai' &&
-          uroman.dict_str[['syllable-info', prev_char]] == 'written-pre-consonant-spoken-post-consonant' &&
+
+        if data.chr_script_name(prev_char) == 'Thai' &&
+          data.dict_str[['syllable-info', prev_char]] == 'written-pre-consonant-spoken-post-consonant' &&
           rom.match?(/[bcdfghjklmnpqrstvwxyz]/) &&
           (vowel_rom = romanization_by_first_rule(prev_char))
           return [rom + vowel_rom, start - 1, finish, 'rom exp']
         end
+
         if first_char == "\u0E2D" && (finish - start == 1)
-          prev_script = uroman.chr_script_name(prev_char)
-          next_script = uroman.chr_script_name(next_char)
+          prev_script = data.chr_script_name(prev_char)
+          next_script = data.chr_script_name(next_char)
           prev_rom = find_rom_edge_path_backwards(0, start, 1, return_str: true)
           next_rom = romanization_by_first_rule(next_char)
           unless (prev_script == 'Thai' && next_script == 'Thai' &&
@@ -272,7 +272,7 @@ module Uroman
       end
 
       # Coptic: consonant + grace-accent = e + consonant
-      if next_char == "\u0300" && uroman.chr_script_name(last_char) == 'Coptic' &&
+      if next_char == "\u0300" && data.chr_script_name(last_char) == 'Coptic' &&
         !simple_top_romanization_candidate_for_span(orig_start, finish + 1)
         rom = 'e' + rom
         finish += 1
@@ -281,7 +281,7 @@ module Uroman
 
       # Japanese small y: ki + small ya = kya etc.
       if next_char && 'ゃゅょャュョ'.include?(next_char) &&
-        uroman.chr_script_name(last_char) == uroman.chr_script_name(next_char) &&
+        data.chr_script_name(last_char) == data.chr_script_name(next_char) &&
         rom.match?(/([bcdfghjklmnpqrstvwxyz]i$)/) &&
         (y_rom = romanization_by_first_rule(next_char)) &&
         !simple_top_romanization_candidate_for_span(orig_start, finish + 1) &&
@@ -293,16 +293,16 @@ module Uroman
 
       # Japanese vowel lengthener (U+30FC)
       last_rom_char = rom[-1]
-      if next_char == 'ー' && %w[Hiragana Katakana].include?(uroman.chr_script_name(last_char)) &&
+      if next_char == 'ー' && %w[Hiragana Katakana].include?(data.chr_script_name(last_char)) &&
         'aeiou'.include?(last_rom_char)
         return [rom + last_rom_char, start, finish + 1, 'rom exp']
       end
 
       # Virama (in Indian languages)
-      return [rom, start, finish + 1, 'rom exp'] if @uroman.dict_bool[['is-virama', next_char]]
+      return [rom, start, finish + 1, 'rom exp'] if data.dict_bool[['is-virama', next_char]]
 
       rom = rom[1..] if rom.start_with?(' ') && (start == 0 || prev_char == ' ')
-      rom = rom[0..-2] if rom.end_with?(' ') && (finish == full_string.length + 1 || next_char == ' ')
+      rom = rom[0..-2] if rom.end_with?(' ') && (finish == @s.length + 1 || next_char == ' ')
 
       [rom, start, finish, annot]
     end
@@ -320,7 +320,7 @@ module Uroman
           if c == "\u2800" # Braille space
             all_caps = false
           else
-            @props[["is-upper", i]] = true
+            @props[['is-upper', i]] = true
           end
         end
       end
@@ -390,7 +390,7 @@ module Uroman
 
         if vowel_pos
           tibetan_letter_positions.each do |i|
-            @props[["edge-vowel", i]] ||= false
+            @props[['edge-vowel', i]] ||= false
           end
         else
           best_cost = Float::INFINITY
@@ -402,7 +402,7 @@ module Uroman
             pre = roms[0..rel_pos].join('')
             post = roms[(rel_pos + 1)..].join('')
 
-            cost = if @props[["edge-vowel", i]] == false
+            cost = if @props[['edge-vowel', i]] == false
                      20
                    elsif n_letters == 1
                      0
@@ -579,7 +579,7 @@ module Uroman
 
     def decomp_rom(char_position)
       full_string = @s
-      char = full_string[char_position]
+      char = @s[char_position]
       rom = nil
       if (ud_decomp_s = UD.decomposition(char))
         format_comps = []
@@ -606,8 +606,8 @@ module Uroman
 
         if rom && Util.ud_numeric(char)
           rom.gsub!('⁄', '/')
-          rom = " #{rom}" if char_position >= 1 && Util.ud_numeric(full_string[char_position - 1])
-          rom += ' ' if char_position + 1 < full_string.length && Util.ud_numeric(full_string[char_position + 1])
+          rom = " #{rom}" if char_position >= 1 && Util.ud_numeric(@s[char_position - 1])
+          rom += ' ' if char_position + 1 < @s.length && Util.ud_numeric(@s[char_position + 1])
         end
       end
       rom
@@ -693,7 +693,7 @@ module Uroman
     end
 
     def add_braille_number(start, finish, txt, **_args)
-      new_edge = NumEdge.new(start, finish, txt, @uroman)
+      new_edge = NumEdge.new(start, finish, txt, data)
       new_edge.type = 'number'
       add_edge(new_edge)
     end
@@ -721,14 +721,14 @@ module Uroman
     end
 
     # Adds a numerical romanization edge to the romanization lattice, currently just for digits.
-    def add_numbers(uroman, verbose: false)
+    def add_numbers(data, verbose: false)
       s = @s
       num_edges = []
 
       # Iterate through each character in the string to find numerical properties
       s.each_char.with_index do |char, start|
-        if uroman.num_props[char]
-          new_edge = NumEdge.new(start, start + 1, char, uroman)
+        if data.num_props[char]
+          new_edge = NumEdge.new(start, start + 1, char, data)
           num_edges << new_edge
           puts "NumEdge #{new_edge}" if verbose
           add_edge(new_edge)
@@ -776,7 +776,7 @@ module Uroman
         # If a sequence of digits is found, create a new edge
         if sub_edges.length >= 2
           new_value = new_value_s.include?('.') ? new_value_s.to_f : new_value_s.to_i
-          new_edge = NumEdge.new(sub_edges.first.start, sub_edges.last.end, new_value.to_s, uroman, active: true)
+          new_edge = NumEdge.new(sub_edges.first.start, sub_edges.last.end, new_value.to_s, data, active: true)
           new_edge.update(value: new_value, value_s: new_value_s, n_decimals: n_decimals, num_base: 1, e_type: 'D1', script: sub_edges.last.script)
           add_edge(new_edge)
           num_edges = update_edge_list(num_edges, new_edge, sub_edges)
@@ -792,7 +792,7 @@ module Uroman
 
         if right_edge.is_a?(NumEdge) && right_edge.active && right_edge.value.is_a?(Integer) && right_edge.num_base > 1 && !right_edge.is_large_power
           new_value = edge.value * right_edge.value
-          new_edge = NumEdge.new(edge.start, right_edge.end, new_value.to_s, uroman, active: true)
+          new_edge = NumEdge.new(edge.start, right_edge.end, new_value.to_s, data, active: true)
           new_edge.update(value: new_value, num_base: right_edge.num_base, e_type: 'G1', orig_txt: edge.orig_txt + right_edge.orig_txt, script: right_edge.script)
           add_edge(new_edge)
           num_edges = update_edge_list(num_edges, new_edge, [edge, right_edge])
@@ -825,7 +825,7 @@ module Uroman
         # Create a new edge for the combined number group
         if sub_edges.length >= 2
           new_value = sub_edges.sum(&:value)
-          new_edge = NumEdge.new(sub_edges.first.start, sub_edges.last.end, new_value.to_s, uroman, active: true)
+          new_edge = NumEdge.new(sub_edges.first.start, sub_edges.last.end, new_value.to_s, data, active: true)
           new_edge.update(value: new_value, num_base: sub_edges.last.num_base, e_type: 'G2', orig_txt: sub_edges.map(&:orig_txt).join, script: sub_edges.last.script)
           add_edge(new_edge)
           num_edges = update_edge_list(num_edges, new_edge, sub_edges)
@@ -844,7 +844,7 @@ module Uroman
           new_value = (edge.value * right_edge.value).round(5)
           new_value = new_value.to_i if new_value.to_i == new_value
 
-          new_edge = NumEdge.new(edge.start, right_edge.end, new_value.to_s, uroman, active: true)
+          new_edge = NumEdge.new(edge.start, right_edge.end, new_value.to_s, data, active: true)
           new_edge.update(value: new_value, num_base: right_edge.num_base, e_type: 'G3', orig_txt: edge.orig_txt + right_edge.orig_txt, script: right_edge.script)
           add_edge(new_edge)
           num_edges = update_edge_list(num_edges, new_edge, [edge, right_edge])
@@ -861,9 +861,9 @@ module Uroman
         orig_char = @s[start]
         unless @lattice[[start, end_pos]]
           rom, edge_annotation = orig_char, 'orig'
-          if @uroman.char_is_nonspacing_mark?(rom)
+          if data.char_is_nonspacing_mark?(rom)
             rom, edge_annotation = '', 'Mn'
-          elsif @uroman.char_is_format_char?(rom) # e.g. zero-width non-joiner, zero-width joiner
+          elsif data.char_is_format_char?(rom) # e.g. zero-width non-joiner, zero-width joiner
             rom, edge_annotation = '', 'Cf'
           elsif UnicodeUtils.category(orig_char) == 'Co'
             rom, edge_annotation = '', 'Co'
@@ -909,7 +909,7 @@ module Uroman
           old_rom_core, old_rom_suffix = nil, nil
         end
 
-        @uroman.rom_rules[orig_s].each do |rom_rule|
+        data.rom_rules[orig_s].each do |rom_rule|
           rom_t = rom_rule['t']
           next unless cand_is_valid?(rom_rule, start, end_pos, rom_t)
 
@@ -1006,7 +1006,7 @@ module Uroman
     # Finds a partial best path on the left from a start position to provide left contexts for
     # romanization rules. Can return a string or a list of edges. Is typically used for a short context,
     # as specified by min_char.
-    def find_rom_edge_path_backwards(start, finish, min_char: nil, return_str: false, skip_num_edge: false)
+    def find_rom_edge_path_backwards(start, finish, min_char = nil, return_str: false, skip_num_edge: false)
       result_edges = []
       rom = ''
       finish2 = finish
